@@ -1,23 +1,38 @@
 #!/bin/bash
 
+#WORKINGDIR="/tmp/${0##*/}-$$"
+WORKINGDIR=".${0##*/}-$$"
+
 if (( ${#@} != 1 )) || [[ $1 = '--help' ]]; then
 	printf '%s\n' \
 		"Downloads Scribd book pages as JPG files." \
 		"Usage: $0 scribd_book_url"
 	exit 1
 elif ! command -v wget > /dev/null; then
-	echo "This script requires 'wget'."
+	echo "This script requires wget."
+	exit 1
+elif ! command -v convert > /dev/null; then
+	echo "This script requires ImageMagick."
+	exit 1
+elif ! command -v pdftk > /dev/null; then
+	echo "This script requires PDFTK."
 	exit 1
 fi
 
-printf '%s ' "Getting HTML content..."
+printf 'Getting HTML content... '
 if ! html="$(wget -qO - "$1")"; then
 	printf '%s\n' "error." "Could not download \"$1\"."
 	exit 1
 fi
 echo "done."
 
-printf '%s ' "Finding assetPrefix..."
+filename="${html#*<title>}"
+filename="${filename%%</title>*}"
+filename="${filename//\//-}"
+
+echo "Destination PDF: \"$filename.pdf\"."
+
+printf 'Searching for assetPrefix... '
 regexPrefix="docManager.assetPrefix = \""
 if ! [[ $html =~ $regexPrefix ]]; then
 	printf '%s\n' "error." "\"$1\" is not a valid Scribd book URL."
@@ -25,9 +40,9 @@ if ! [[ $html =~ $regexPrefix ]]; then
 fi
 prefix="${html#*$regexPrefix}"
 prefix="${prefix%%\"*}"
-echo "done."
+echo "\"$prefix\"."
 
-printf '%s ' "Finding pages to download..."
+printf 'Finding pages to download... '
 regexJpg="http://html.scribd.com/$prefix/images/[0-9]+-[0-9a-z]+.jpg"
 regexJsonp="http://html[1-4].scribdassets.com/$prefix/pages/[0-9]+-[0-9a-z]+.jsonp"
 unset -v pages
@@ -45,18 +60,55 @@ while read line; do
 		pages+=("$page")
 	fi
 done <<< "$html"
-echo "done."
-
 totalPages="${#pages[@]}"
+echo "$totalPages pages."
 
 padding="$(($totalPages-1))"
 padding="${#totalPages}"
 
-for pageNumber in ${!pages[@]}; do
-	printf 'Downloading page %s of %s... ' "$((pageNumber + 1))" "$totalPages"
-	printf -v file "%.${padding}d.jpg" "$((pageNumber + 1))"
-	wget -qO "$file" "http://html.scribd.com/$prefix/images/${pages[$pageNumber]}.jpg"
+clean-up() {
+	printf 'Cleaning up... '
+	rm -r "$WORKINGDIR"
 	echo "done."
+}
+
+trap 'echo; clean-up; exit 1' SIGINT SIGTERM
+
+echo "Using working directory \"$WORKINGDIR\"."
+mkdir "$WORKINGDIR"
+
+for pageIndex in ${!pages[@]}; do
+	pageNumber="$((pageIndex + 1))"
+	printf -v file "%.${padding}d" "$((pageIndex + 1))"
+
+	printf 'Rendering PDF data for page %s (of %s)... ' "$pageNumber" "$totalPages"
+	retries=0
+	until (( retries == 10 )); do
+		wget -qO "$WORKINGDIR/$file.jpg" "http://html.scribd.com/$prefix/images/${pages[$pageIndex]}.jpg" && break
+		sleep 2
+	done
+
+	if (( retries == 10 )); then
+		clean-up
+		exit 1
+		printf '%s\n' "error." "Error while downloading \"http://html.scribd.com/$prefix/images/${pages[$pageIndex]}.jpg\"."
+	fi
+
+	if ! convert "$WORKINGDIR/$file.jpg" "$WORKINGDIR/$file.pdf"; then
+		printf '%s\n' "error." "Could not convert \"$WORKINGDIR/$file.jpg\" to PDF."
+		clean-up
+		exit 1
+	fi
+
+	rm "$WORKINGDIR/$file.jpg"
+	echo "$(($(stat --printf '%s' "$WORKINGDIR/$file.pdf") / 1024)) KB."
 done
 
-echo "Complete."
+printf 'Combining all PDF files to one file... '
+pdftk "$WORKINGDIR/"*".pdf" cat output "$WORKINGDIR/$filename.pdf"
+mv "$WORKINGDIR/$filename.pdf" "$filename.pdf"
+echo "$(($(stat --printf '%s' "$filename.pdf") / 1024)) KB."
+
+clean-up
+
+echo "PDF file saved as \"$filename.pdf\"."
