@@ -1,18 +1,35 @@
 #!/bin/bash
 
+if (( ${#@} != 1 )) || [[ $1 = '--help' ]]; then
+	printf '%s\n' \
+		"Downloads Scribd book pages as JPG files." \
+		"Usage: $0 scribd_book_url"
+	exit 1
+elif ! command -v wget > /dev/null; then
+	echo "This script requires 'wget'."
+	exit 1
+fi
+
 printf '%s ' "Getting HTML content..."
-html="$(wget -qO - "$1")"
+if ! html="$(wget -qO - "$1")"; then
+	printf '%s\n' "error." "Could not download \"$1\"."
+	exit 1
+fi
 echo "done."
 
 printf '%s ' "Finding assetPrefix..."
-prefix="${html#*docManager.assetPrefix = \"}"
+regexPrefix="docManager.assetPrefix = \""
+if ! [[ $html =~ $regexPrefix ]]; then
+	printf '%s\n' "error." "\"$1\" is not a valid Scribd book URL."
+	exit 1
+fi
+prefix="${html#*$regexPrefix}"
 prefix="${prefix%%\"*}"
 echo "done."
 
+printf '%s ' "Finding pages to download..."
 regexJpg="http://html.scribd.com/$prefix/images/[0-9]+-[0-9a-z]+.jpg"
 regexJsonp="http://html[1-4].scribdassets.com/$prefix/pages/[0-9]+-[0-9a-z]+.jsonp"
-
-printf '%s ' "Finding pages to download..."
 unset -v pages
 while read line; do
 	if [[ $line =~ $regexJsonp ]]; then
@@ -37,7 +54,7 @@ padding="${#totalPages}"
 
 for pageNumber in ${!pages[@]}; do
 	printf 'Downloading page %s of %s... ' "$((pageNumber + 1))" "$totalPages"
-	printf -v file "%.${padding}d.jpg" $((pageNumber + 1))
+	printf -v file "%.${padding}d.jpg" "$((pageNumber + 1))"
 	wget -qO "$file" "http://html.scribd.com/$prefix/images/${pages[$pageNumber]}.jpg"
 	echo "done."
 done
