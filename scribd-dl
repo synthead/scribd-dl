@@ -6,7 +6,7 @@ WORKINGDIR=".${0##*/}-$$"
 if (( ${#@} != 1 )) || [[ $1 = '--help' ]]; then
 	printf '%s\n' \
 		"Renders PDF files of books on Scribd." \
-		"Usage: $0 scribd_book_url"
+		"Usage: ${0##*/} scribd_book_url"
 	exit 1
 elif ! command -v wget > /dev/null; then
 	echo "This script requires wget."
