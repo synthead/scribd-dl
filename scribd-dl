@@ -63,9 +63,6 @@ done <<< "$html"
 totalPages="${#pages[@]}"
 echo "$totalPages pages."
 
-padding="$(($totalPages-1))"
-padding="${#totalPages}"
-
 clean-up() {
 	printf 'Cleaning up... '
 	rm -r "$WORKINGDIR"
@@ -77,6 +74,8 @@ trap 'echo; clean-up; exit 1' SIGINT SIGTERM
 echo "Using working directory \"$WORKINGDIR\"."
 mkdir "$WORKINGDIR"
 
+padding="$(($totalPages-1))"
+padding="${#totalPages}"
 for pageIndex in ${!pages[@]}; do
 	pageNumber="$((pageIndex + 1))"
 	printf -v file "%.${padding}d" "$((pageIndex + 1))"
