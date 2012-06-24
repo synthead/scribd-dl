@@ -1,0 +1,45 @@
+#!/bin/bash
+
+printf '%s ' "Getting HTML content..."
+html="$(wget -qO - "$1")"
+echo "done."
+
+printf '%s ' "Finding assetPrefix..."
+prefix="${html#*docManager.assetPrefix = \"}"
+prefix="${prefix%%\"*}"
+echo "done."
+
+regexJpg="http://html.scribd.com/$prefix/images/[0-9]+-[0-9a-z]+.jpg"
+regexJsonp="http://html[1-4].scribdassets.com/$prefix/pages/[0-9]+-[0-9a-z]+.jsonp"
+
+printf '%s ' "Finding pages to download..."
+unset -v pages
+while read line; do
+	if [[ $line =~ $regexJsonp ]]; then
+		page="${line##*/pages/}"
+		page="${page%%.jsonp*}"
+		pages+=("$page")
+		continue
+	fi
+
+	if [[ $line =~ $regexJpg ]]; then
+		page="${line##*/images/}"
+		page="${page%%.jpg*}"
+		pages+=("$page")
+	fi
+done <<< "$html"
+echo "done."
+
+totalPages="${#pages[@]}"
+
+padding="$(($totalPages-1))"
+padding="${#totalPages}"
+
+for pageNumber in ${!pages[@]}; do
+	printf 'Downloading page %s of %s... ' "$((pageNumber + 1))" "$totalPages"
+	printf -v file "%.${padding}d.jpg" $((pageNumber + 1))
+	wget -qO "$file" "http://html.scribd.com/$prefix/images/${pages[$pageNumber]}.jpg"
+	echo "done."
+done
+
+echo "Complete."
