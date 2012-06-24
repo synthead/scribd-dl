@@ -88,8 +88,8 @@ for pageIndex in ${!pages[@]}; do
 	done
 
 	if (( retries == 10 )); then
-		clean-up
 		printf '%s\n' "error." "Error while downloading \"http://html.scribd.com/$prefix/images/${pages[$pageIndex]}.jpg\"."
+		clean-up
 		exit 1
 	fi
 
