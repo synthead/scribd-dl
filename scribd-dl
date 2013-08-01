@@ -63,7 +63,7 @@ done <<< "$html"
 totalPages="${#pages[@]}"
 echo "$totalPages pages."
 
-clean-up() {
+cleanup() {  
 	printf 'Cleaning up... '
 	rm -r "$WORKINGDIR"
 	echo "done."
@@ -89,13 +89,13 @@ for pageIndex in ${!pages[@]}; do
 
 	if (( retries == 10 )); then
 		printf '%s\n' "error." "Error while downloading \"http://html.scribd.com/$prefix/images/${pages[$pageIndex]}.jpg\"."
-		clean-up
+		cleanup
 		exit 1
 	fi
 
 	if ! convert "$WORKINGDIR/$file.jpg" "$WORKINGDIR/$file.pdf"; then
 		printf '%s\n' "error." "Could not convert \"$WORKINGDIR/$file.jpg\" to PDF."
-		clean-up
+		cleanup
 		exit 1
 	fi
 
@@ -108,6 +108,6 @@ pdftk "$WORKINGDIR/"*".pdf" cat output "$WORKINGDIR/$filename.pdf"
 mv "$WORKINGDIR/$filename.pdf" "$filename.pdf"
 echo "$(($(stat --printf '%s' "$filename.pdf") / 1024)) KB."
 
-clean-up
+cleanup
 
 echo "PDF file saved as \"$filename.pdf\"."
